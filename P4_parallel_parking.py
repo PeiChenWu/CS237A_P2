@@ -117,6 +117,39 @@ class ParkingRRT(RRT):
         plot_line_segments([self.body_corners_at_config(self.x_goal)[i:i + 2] for i in range(4)])
         plt.axis("equal")
 
+    def find_nearest(self, V, x):
+        ########## Code starts here ##########
+        p_len_lst = []
+        for state in np.array(V):
+            p_len_lst.append(reeds_shepp.path_length(np.array(state),np.array(x), self.turning_radius))
+        return V[np.argmin(p_len_lst)]
+        ########## Code ends here ##########
+
+    def steer_towards(self, x1, x2, eps):
+        """
+        A subtle issue: if you use d_path.sample_many to return the point
+        at distance eps along the path from x to y, use a turning radius
+        slightly larger than self.turning_radius
+        (i.e., 1.001*self.turning_radius). Without this hack,
+        d_path.sample_many might return a point that can't quite get to in
+        distance eps (using self.turning_radius) due to numerical precision
+        issues.
+        """
+        ########## Code starts here ##########
+        rs_path = reeds_shepp_path_sample_with_cusps(np.array(x1), np.array(x2), 1.001*self.turning_radius, eps)
+        return rs_path[1]
+        ########## Code ends here ##########
+
+    def is_free_motion(self, obstacles, x1, x2, resolution = np.pi/12):
+        rs_path = reeds_shepp_path_sample_with_cusps(x1,x2, self.turning_radius, self.turning_radius * resolution)
+        for i in range(len(rs_path) - 1):
+            for line in obstacles:
+                corners = self.body_corners_at_config(rs_path[i])
+                for j in range(len(corners)-1):
+                    if line_line_intersection([corners[j][:2], corners[j+1][:2]], line):
+                        return False
+        return True
+
     ### Override base `RRT` methods here as necessary, i.e., look at the methods in the base `RRT` class in P2_rrt.py
     # and see which ones need to be changed/reimplemented for `ParkingRRT` (HINT: possibly see `P2_rrt.GeometricRRT`
     # and `P2_rrt.DubinsRRT` for inspiration). HINT: How will you validate collision-free motions in this case? You may

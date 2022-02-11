@@ -105,7 +105,29 @@ class RRT(object):
         #   - the order in which you pass in arguments to steer_towards and is_free_motion is important
 
         ########## Code starts here ##########
-        
+        for k in range(0,max_iters):
+            z = np.random.uniform(0,1)
+            if z < goal_bias:
+                x_rand = self.x_goal
+            else:
+                x_rand = np.random.uniform(self.statespace_lo, self.statespace_hi)
+            
+            x_near = self.find_nearest(V[:n,:], x_rand)
+            x_new = self.steer_towards(x_near, x_rand, eps)
+            
+            if self.is_free_motion(self.obstacles, x_near, x_new):
+                V[n,:] = x_new
+                P[n] = [np.array_equal(x_near,x) for x in V].index(True)
+                n= n + 1
+                if np.all(x_new == self.x_goal):
+                    self.path = [self.x_goal]
+                    i = n - 1
+                    while i > 0:
+                        self.path.append(V[P[i]])
+                        i = P[i]
+                    self.path.reverse()
+                    success = True
+                    break  
         ########## Code ends here ##########
 
         plt.figure()
@@ -143,7 +165,14 @@ class RRT(object):
             None, but should modify self.path
         """
         ########## Code starts here ##########
-        
+        success = False
+        while not success:
+            success = True
+            for i in range(len(self.path)-2,0,-1):
+                if self.is_free_motion(self.obstacles, self.path[i+1],self.path[i-1]):
+                    self.path.pop(i)
+                    i = i - 1
+                    success = False        
         ########## Code ends here ##########
 
 class GeometricRRT(RRT):
@@ -156,14 +185,19 @@ class GeometricRRT(RRT):
         # Consult function specification in parent (RRT) class.
         ########## Code starts here ##########
         # Hint: This should take one line.
-        
+        return V[np.argmin([np.linalg.norm(v) for v in V-x])]        
         ########## Code ends here ##########
 
     def steer_towards(self, x1, x2, eps):
         # Consult function specification in parent (RRT) class.
         ########## Code starts here ##########
         # Hint: This should take one line.
-        
+        delta = x2 - x1
+        theta = np.arctan(delta[1]/delta[0])
+        if np.linalg.norm(delta) < eps:
+            return x2
+        else:
+            return np.array([x1[0]+np.cos(theta)*eps, x1[1]+np.sin(theta)*eps])        
         ########## Code ends here ##########
 
     def is_free_motion(self, obstacles, x1, x2):
@@ -203,7 +237,11 @@ class DubinsRRT(RRT):
         # HINT: The order of arguments for dubins.shortest_path() is important for DubinsRRT.
         import dubins
         ########## Code starts here ##########
-        
+        p_len_lst = []
+        for state in np.array(V):
+            d_path = dubins.shortest_path(state,  np.array(x), self.turning_radius)
+            p_len_lst.append(d_path.path_length())
+        return V[np.argmin(p_len_lst)]        
         ########## Code ends here ##########
 
     def steer_towards(self, x1, x2, eps):
@@ -219,7 +257,11 @@ class DubinsRRT(RRT):
         """
         # HINT: You may find the functions dubins.shortest_path(), d_path.path_length(), and d_path.sample_many() useful
         ########## Code starts here ##########
-        
+        d_path = dubins.shortest_path(x1,x2,1.001*self.turning_radius)
+        if d_path.path_length() < eps:
+            return x2
+        else:
+            return d_path.sample_many(eps)[0][1]        
         ########## Code ends here ##########
 
     def is_free_motion(self, obstacles, x1, x2, resolution = np.pi/6):
